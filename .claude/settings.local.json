@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git -c user.name=Will -c user.email=whzcnfr@gmail.com commit -q -m 'docs: 预算调整为 0.7B，词表按目标全集可逆裁剪以支持扩语言 *)"
+    ]
+  }
+}
