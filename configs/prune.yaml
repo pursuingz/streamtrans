@@ -1,0 +1,7 @@
+# Phase 1 剪枝配置
+starter_model: Qwen/Qwen3.5-2B
+target_params_b: 0.7
+target_vocab_size: 110000        # 中英为主 + 预留主要语言
+keep_languages: [zh, en]          # 第一版训练语言
+reserve_languages: [ja, ko, fr, de, es, ru]  # 词表预留、暂不训练
+drop_vision: true

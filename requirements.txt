@@ -1,0 +1,9 @@
+torch>=2.2
+# Qwen3.5 (model_type=qwen3_5) 需 transformers 4.57.0.dev0+，PyPI 稳定版可能不够；
+# 如稳定版加载失败，从 GitHub 装：pip install git+https://github.com/huggingface/transformers.git
+transformers>=4.57.0
+datasets>=2.18
+sacrebleu>=2.4
+pydantic>=2.6
+PyYAML>=6.0
+pytest>=8.0

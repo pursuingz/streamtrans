@@ -42,8 +42,18 @@ checkpoints/    各阶段模型产物（.gitignore，不入库）
 - 24GB 显存约束：训练默认开梯度检查点 + 8bit 优化器；显存不足优先降 batch / 上梯度累积，不改模型规模。
 - 密钥/token 不进代码、commit、日志。
 
-## 验证命令
-（实现阶段补全：smoke test、单测、端到端延迟-质量评测脚本）
+## 验证命令（在远程 24GB Linux 机执行；本地 Windows 为 Python 3.9 仅写代码）
+Phase 0：
+```bash
+python -m venv .venv && source .venv/bin/activate   # Python 3.10+
+pip install -e . && pip install -r requirements.txt
+# 若 transformers 稳定版不识别 qwen3_5：pip install git+https://github.com/huggingface/transformers.git
+pytest -v                                            # 应 10 passed (Task1-3,5,6)
+python scripts/run_inspect.py --model Qwen/Qwen3.5-2B   # Task4 勘探，产出 docs/model_inspection/
+python scripts/run_inspect.py --model Qwen/Qwen3.5-9B
+# 回填 docs/model_inspection/CONCLUSIONS.md 后，方可进 Phase 1
+```
+（Phase 1-4 验证命令各自计划补全）
 
 ## 红线（遵从全局 CLAUDE.md）
 删文件/目录/git 历史、改密钥配置、git push/rebase/reset --hard、装全局依赖、公开发布——先问 Will。
