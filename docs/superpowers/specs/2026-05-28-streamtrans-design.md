@@ -27,17 +27,24 @@
 
 | | Qwen3.5-2B（起点/学生底座） | Qwen3.5-9B（教师） |
 |---|---|---|
-| 架构 | 混合：Gated DeltaNet（线性注意力）+ Gated Attention 交错 | 同类混合架构 |
-| 层数 / hidden / FFN | 24 / 2048 / 6144 | 32 / 4096 / — |
-| 布局 | 6×〔3×(DeltaNet→FFN)+1×(GatedAttn→FFN)〕 | 8×〔3×(DeltaNet→FFN)+1×(GatedAttn→FFN)〕 |
-| 词表 | 248,320 | **248,320（同词表）** |
+| model_type | `qwen3_5`（`Qwen3_5ForConditionalGeneration`） | 同系 |
+| transformers | **需 4.57.0.dev0+（dev 版，可能从 GitHub 装）** | 同 |
+| 架构 | 混合：SSM/Mamba 风格线性注意力（含 conv kernel）+ 周期性 full attention | 同类混合架构 |
+| 层结构 | 24 层，`layer_types`=[linear,linear,linear,**full**]×6（每 4 层 1 个 full attention） | 32 层，同节律 |
+| hidden / FFN | 2048 / 6144 | 4096 / — |
+| 线性注意力 | key/value head_dim 128，各 16 heads，conv_kernel 4，ssm_dtype fp32 | 同类 |
+| full attention | 8 heads / 2 KV(GQA) / head_dim 256 | GQA |
+| 额外结构 | **MTP 头**（`mtp_num_hidden_layers:1`，multi-token prediction） | 同 |
+| 词表 / tie | 248,320 / **tie_word_embeddings=true（嵌入仅一份）** | 248,320（同词表） |
 | 语言 | 201 | 201 |
-| 多模态 | 带 Vision Encoder | 带 Vision Encoder |
+| 多模态 | 带 `vision_config`（text 部分在 `text_config` 子树） | 带 vision_config |
 | 版本 | Base + Instruct | Base + Instruct |
+
+> 以上为 2026-05-29 直接拉取 `config.json` 核实的一手事实（修正了早期二手描述「Gated DeltaNet」——实为带 conv 的 SSM/Mamba 风格线性注意力）。
 
 两点关键：
 - **同词表 248,320** → 教师 logits 与学生逐 token 对齐，OPD 软标签蒸馏成立。
-- **Gated DeltaNet 是流式利好**：线性注意力维护固定大小循环状态，流式增量推理时显存/计算近似恒定，端侧长时同传不爆内存。这是该底座相对标准 Transformer 的天然优势。
+- **SSM/线性注意力是流式利好**：SSM/Mamba 风格线性注意力维护固定大小循环状态（RNN 式），流式增量推理时显存/计算近似恒定，端侧长时同传不爆内存。这是该底座相对标准 Transformer 的天然优势（且 RNN 式状态比 DeltaNet 论点更强）。每 4 层混入的 full attention 层仍有 KV cache，但占比仅 1/4。
 
 ---
 
@@ -185,7 +192,7 @@ trany_1/
 ## 8. 风险与现实预期
 
 1. **≤0.5B + 多语言质量吃紧**：物理限制，非代码问题。缓解：先收窄语言对跑通，再扩；语言范围做配置开关（见 §6）。
-2. **DeltaNet 端侧算子支持未知**：llama.cpp/MNN 是否支持 Gated DeltaNet 待核实。若不支持需自定义算子或回退。实现阶段第一批要验证的事。
+2. **SSM 线性注意力端侧算子支持未知**：架构实为带 conv 的 SSM/Mamba 风格 + 周期 full attention + MTP 头。llama.cpp 对 Mamba 类有部分支持，但 Qwen3.5 这个特定变体（conv_kernel、mrope、MTP）能否被端侧框架转换/运行待实测。若不支持需自定义算子或回退到标准架构起点。实现阶段第一批要验证的事。
 3. **9B 教师离线生成慢**：4bit 量化教师或降到更小教师档；配置留开关。
 4. **wait-k 在语序差异大的方向（如中↔英）固定 k 效果有限**：正是「进阶」阶段要解决的，结构预留自适应扩展点。
 5. **2B 纯文本部分确切参数量待核实**：剥视觉塔后的实际规模决定剪枝幅度，实现第一步拿真实 config 确认。

@@ -42,7 +42,9 @@ where = ["src"]
 
 ```
 torch>=2.2
-transformers>=4.51
+# Qwen3.5 (model_type=qwen3_5) 需 transformers 4.57.0.dev0+，PyPI 稳定版可能不够；
+# 如稳定版加载失败，从 GitHub 装：pip install git+https://github.com/huggingface/transformers.git
+transformers>=4.57.0
 datasets>=2.18
 sacrebleu>=2.4
 pydantic>=2.6
@@ -50,7 +52,8 @@ PyYAML>=6.0
 pytest>=8.0
 ```
 
-> 注：transformers 版本需实际支持 Qwen3.5；Task 4 勘探时若加载失败，按报错升级版本或加 `trust_remote_code=True`，并把可用版本写回此文件。
+> **已核实（2026-05-29 拉取 config.json）**：Qwen3.5-2B 的 `model_type=qwen3_5`、`transformers_version=4.57.0.dev0`。Task 4 在远程 24GB Linux 机执行；若 `pip` 稳定版 transformers 不识别该架构，按上方注释从 GitHub 装 dev 版，并把确切可用版本写回此文件。
+> **Python 必须 3.10+**（本计划代码用了 `X | Y`、`list[int]` 等 3.10+ 语法）。当前 Windows 开发机为 3.9，所有执行/测试在远程 Linux 机进行。
 
 - [ ] **Step 3: 写 `pytest.ini`**
 
@@ -379,7 +382,8 @@ def main():
     args = ap.parse_args()
 
     model, cfg = load_meta_model(args.model)
-    prefixes = ["embed_tokens", "lm_head", "layers", "visual", "vision", "mlp", "self_attn"]
+    # 覆盖已知组件：嵌入、各层、视觉塔、MTP 头。真实 module 名以 dump 为准。
+    prefixes = ["embed_tokens", "lm_head", "layers", "visual", "vision", "mtp", "mlp", "self_attn"]
     bd = param_breakdown(model, group_prefixes=prefixes)
     names = dump_module_names(model)
 
@@ -414,11 +418,13 @@ Expected: 打印 total params（应接近 2B 含 vision；纯文本=total−visi
 - [ ] **Step 7: 写勘探结论文档**
 
 把关键发现落成 `docs/model_inspection/CONCLUSIONS.md`，必须回答：
-1. 纯文本 LLM 参数量 = ?（total − vision）
-2. embed_tokens 实际参数量、是否 tie lm_head
+1. 纯文本 LLM 参数量 = ?（total − vision；config 已知 tie_word_embeddings=true，嵌入仅一份）
+2. embed_tokens 实际参数量（应≈248320×2048≈0.5B），确认 lm_head 与之 tie
 3. Vision Encoder 的 module 前缀名（剥离用）= ?
-4. DeltaNet 块、GatedAttn 块、FFN 的真实 module 命名路径 = ?
-5. transformers 能否原生加载，还是需 trust_remote_code/特定版本 = ?
+4. SSM/线性注意力块、full attention 块、FFN 的真实 module 命名路径 = ?（config: layer_types=[L,L,L,full]×6）
+5. **MTP 头**（mtp_num_hidden_layers=1）的 module 命名与参数量 = ?（剥离/保留决策）
+6. transformers 哪个确切版本能加载（稳定版 or GitHub dev）= ?
+7. 端侧可行性预判：SSM(conv_kernel)+mrope+MTP 在 llama.cpp/MNN 的转换可行性初步调研结论 = ?（spec §8 风险2）
 
 - [ ] **Step 8: Commit**
 
