@@ -1,0 +1,17 @@
+# 数据与模型产物，不入库
+data/
+checkpoints/
+*.bin
+*.safetensors
+*.gguf
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 杂项
+.DS_Store
+*.log

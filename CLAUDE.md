@@ -1,0 +1,49 @@
+# StreamTrans —— 端侧多语言流式同传模型
+
+## 项目目标
+训练一个 **≤0.5B 参数、可移动端部署、低延迟流式** 的同声传译模型。
+模态：**文本→文本流式翻译**（语音交给外部 ASR）。
+技术主线：以 Qwen3.5-2B 为起点，结构化剪枝 + 知识蒸馏 + 结构调整，做成端侧 0.5B 模型，并用 wait-k 改造为真正的流式同传。
+
+## 模型选型（已核实，勿擅自更换）
+- **起点（学生底座）**：`Qwen/Qwen3.5-2B`（混合架构：Gated DeltaNet 线性注意力 + Gated Attention；24 层，hidden 2048，FFN 6144，词表 248320，多模态带 Vision Encoder）
+- **教师**：`Qwen/Qwen3.5-9B`（同系、**同词表 248320**，保证 logits 逐 token 对齐）
+- 起点与教师**必须同词表**，否则 logits 蒸馏退化为弱蒸馏。换型号需先改本文件再改代码。
+
+## 核心技术决策（改动需先改本文档）
+1. **剪枝只动通用维度**：剥离 Vision Encoder + 减层 + 缩 FFN 中间维 + 缩 hidden。DeltaNet / GatedAttn 块整块保留或整块删，**不剪线性注意力内部**（规避适配风险）。
+2. **词表裁剪是达成 0.5B 的必经步骤**：全词表 248320 仅嵌入≈0.5B。需按目标语言裁词表（中英+主要语言→~50–80k）。语言范围是决定 0.5B 可行性的总开关。
+3. **蒸馏用 OPD**（借鉴 MiniCPM5）：on-policy（学生自生成序列上）+ reverse KL + 师生 top-k logits 并集。针对同传的暴露偏差。
+4. **流式先 wait-k 后进阶**：prefix-to-prefix 训练，固定 k 跑通全链路后再上自适应策略。
+5. **教师离线**：24GB 单卡装不下 9B 教师在线 + 训练态学生。教师软标签/生成数据**离线落盘**。
+
+## 目录结构约定
+```
+configs/        每阶段一个 yaml，超参与路径全在此，代码不硬编码路径
+src/streamtrans/
+  data/         数据加载（公开语料 + 教师生成）
+  prune/        剥视觉塔、结构化剪枝、词表裁剪
+  distill/      教师离线导出、OPD 蒸馏
+  streaming/    wait-k 数据构造、流式微调、流式解码器
+  eval/         质量(BLEU/COMET) + 延迟(AL/LAAL)
+  export/       量化 + 端侧导出
+scripts/        每阶段一个入口脚本 run_{stage}.py
+docs/superpowers/specs/   设计文档
+data/           语料与中间产物（.gitignore，不入库）
+checkpoints/    各阶段模型产物（.gitignore，不入库）
+```
+- 命名：模块 snake_case，配置键 snake_case，checkpoint 目录 `{stage}_{date}`。
+- 中间产物（教师 logits、生成数据、checkpoint）一律不入 git。
+- 每阶段独立可重跑，阶段间通过 checkpoint + config 解耦。
+
+## 工程纪律
+- 改完跑验证：每阶段先 `scripts/run_<stage>.py --smoke`（小数据跑通）再上全量。
+- 不注释报错凑跑通，找根因。
+- 24GB 显存约束：训练默认开梯度检查点 + 8bit 优化器；显存不足优先降 batch / 上梯度累积，不改模型规模。
+- 密钥/token 不进代码、commit、日志。
+
+## 验证命令
+（实现阶段补全：smoke test、单测、端到端延迟-质量评测脚本）
+
+## 红线（遵从全局 CLAUDE.md）
+删文件/目录/git 历史、改密钥配置、git push/rebase/reset --hard、装全局依赖、公开发布——先问 Will。
