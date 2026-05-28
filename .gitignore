@@ -12,6 +12,9 @@ __pycache__/
 venv/
 *.egg-info/
 
+# 本地 IDE / harness 配置
+.claude/
+
 # 杂项
 .DS_Store
 *.log
