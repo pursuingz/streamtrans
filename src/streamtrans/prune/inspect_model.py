@@ -20,13 +20,27 @@ def param_breakdown(model: nn.Module, group_prefixes: Iterable[str]) -> dict[str
 
 
 def load_meta_model(model_id: str):
-    """在 meta device 上实例化模型（不下载权重，看结构/数参数用）。"""
+    """在 meta device 上实例化模型（不下载权重，看结构/数参数用）。
+
+    Qwen3.5 是 ConditionalGeneration（多模态）架构，AutoModelForCausalLM 可能不认，
+    故按 多模态生成 -> CausalLM -> 通用 顺序尝试。返回 (model, cfg, loader_name)。
+    """
     import torch
-    from transformers import AutoConfig, AutoModelForCausalLM
+    import transformers as tf
+    from transformers import AutoConfig
     cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
-    with torch.device("meta"):
-        model = AutoModelForCausalLM.from_config(cfg, trust_remote_code=True)
-    return model, cfg
+    last_err = None
+    for name in ["AutoModelForImageTextToText", "AutoModelForCausalLM", "AutoModel"]:
+        cls = getattr(tf, name, None)
+        if cls is None:
+            continue
+        try:
+            with torch.device("meta"):
+                model = cls.from_config(cfg, trust_remote_code=True)
+            return model, cfg, name
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+    raise RuntimeError(f"无法用任何 Auto 类加载 {model_id}: {last_err}")
 
 
 def dump_module_names(model: nn.Module) -> list[str]:
