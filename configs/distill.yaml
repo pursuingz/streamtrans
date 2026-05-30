@@ -1,0 +1,24 @@
+# Phase 2 离线 KD 配置
+teacher_model: Qwen/Qwen3.5-9B
+student_ckpt: checkpoints/pruned_20260530
+vocab_map: checkpoints/pruned_20260530/vocab_map.json
+
+corpus_file: data/parallel_zh_en.jsonl        # build_parallel_corpus.py 产出
+teacher_logits_dir: data/teacher_logits        # 教师 top-k shard（不入 git）
+
+# 蒸馏超参
+topk: 64
+temperature: 2.0
+alpha_ce: 0.5            # 硬标签 CE 权重
+beta_kd: 0.5            # 软标签 KD 权重
+directions: [zh2en, en2zh]    # 第一版 zh<->en 双向
+max_len: 256
+shard_size: 10000
+
+# 训练（24GB：8bit 优化器 + 梯度检查点）
+batch_size: 8
+grad_accum: 4
+lr: 2.0e-4
+steps: 2000
+grad_checkpointing: true
+teacher_4bit: true       # 9B 教师 nf4 离线导出

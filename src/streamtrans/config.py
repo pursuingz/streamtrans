@@ -25,6 +25,27 @@ class PruneConfig(BaseModel):
     reversible: bool = True
 
 
+class DistillConfig(BaseModel):
+    teacher_model: str
+    student_ckpt: str
+    vocab_map: str
+    corpus_file: str                       # 平行语料 jsonl: {src, tgt, direction}
+    teacher_logits_dir: str                # 教师 top-k shard 落盘目录
+    topk: int = 64
+    temperature: float = 2.0
+    alpha_ce: float = 0.5
+    beta_kd: float = 0.5
+    directions: list[str] = ["zh2en", "en2zh"]
+    max_len: int = 256
+    shard_size: int = 10000
+    batch_size: int = 8
+    grad_accum: int = 4
+    lr: float = 2.0e-4
+    steps: int = 2000
+    grad_checkpointing: bool = True
+    teacher_4bit: bool = True
+
+
 def load_config(path: str | Path, schema: Type[T]) -> T:
     with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
