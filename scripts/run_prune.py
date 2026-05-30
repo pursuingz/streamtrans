@@ -102,7 +102,7 @@ def main():
 
     print("[3/6] 加载完整权重 (ConditionalGeneration, fp16)")
     full = AutoModelForImageTextToText.from_pretrained(
-        cfg.starter_model, trust_remote_code=True, torch_dtype=torch.float16
+        cfg.starter_model, trust_remote_code=True, dtype=torch.float16
     )
     full_sd = full.state_dict()
     del full
@@ -148,7 +148,9 @@ def main():
 
     print(f"[6/6] 落盘 -> {out_dir}")
     student.save_pretrained(out_dir)
-    tok.save_pretrained(out_dir)  # 注意：tokenizer 仍是原 248320 词表，id 重映射见 vocab_map.json（TODO: 重建裁剪版 tokenizer）
+    # tokenizer 仍是原 248320 词表；学生模型用 110k 新 id。二者通过 vocab_map.json 桥接：
+    # 训练/推理时用 streamtrans.data.vocab_remap.VocabRemapper(原 tokenizer + vocab_map) 编解码。
+    tok.save_pretrained(out_dir)
     (out_dir / "vocab_map.json").write_text(
         json.dumps({str(o): n for o, n in vmap.items()}, ensure_ascii=False), encoding="utf-8"
     )
