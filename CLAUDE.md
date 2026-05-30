@@ -13,8 +13,10 @@
 ## 核心技术决策（改动需先改本文档）
 1. **剪枝只动通用维度**：剥离 Vision Encoder + 减层 + 缩 FFN 中间维 + 缩 hidden。DeltaNet / GatedAttn 块整块保留或整块删，**不剪线性注意力内部**（规避适配风险）。
 2. **词表裁剪按目标全集、可逆**：全词表 248320 仅嵌入≈0.5B，是预算主负担。按"中英为主+预留主要语言（中英日韩+主要欧洲语言）"全集裁到 ~110k，第一版只训中英数据。裁剪可逆（存 id 映射 + 保留原始 embedding），扩语言时只补数据不动结构。总预算 ~0.7B，transformer ≈0.47B。
-3. **蒸馏用 OPD**（借鉴 MiniCPM5）：on-policy（学生自生成序列上）+ reverse KL + 师生 top-k logits 并集。针对同传的暴露偏差。
-4. **流式先 wait-k 后进阶**：prefix-to-prefix 训练，固定 k 跑通全链路后再上自适应策略。
+3. **蒸馏分两步**（借鉴 MiniCPM5 的 OPD）：
+   - **Phase 2 = 离线 KD**：9B 教师离线导出 top-k logits，`L = CE(ref) + forward-KL(teacher‖student)`，heal 剪枝损伤、做成强离线（全句）中英翻译器。教师软标签落盘，训练时只读盘。
+   - **Phase 3 = on-policy OPD + wait-k**：on-policy（学生前缀自生成序列）+ reverse KL + 师生 top-k 并集，与流式同改造一起做——暴露偏差在流式逐前缀解码下才最严重，故 on-policy 并入此阶段。
+4. **流式先 wait-k 后进阶**：prefix-to-prefix 训练，固定 k 跑通全链路后再上自适应策略；on-policy OPD 在此阶段叠加（见决策 3）。
 5. **教师离线**：24GB 单卡装不下 9B 教师在线 + 训练态学生。教师软标签/生成数据**离线落盘**。
 
 ## 目录结构约定

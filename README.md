@@ -63,7 +63,7 @@ python scripts/run_inspect.py --model Qwen/Qwen3.5-9B
 ## 路线图
 
 - **Phase 0（当前）**：项目地基、配置系统、AL 延迟指标、模型勘探、词频统计、平行语料管线。
-- **Phase 1**：剥视觉塔 + 词表裁剪 + 结构化剪枝 + 剪枝恢复（待勘探结论回填后启动）。
-- **Phase 2**：教师离线导出 + OPD 蒸馏。
-- **Phase 3**：wait-k 流式数据构造 + 流式微调 + 流式解码。
-- **Phase 4**：量化 + 端侧导出 + 质量/延迟联合评测。
+- **Phase 1（完成）**：剥视觉塔 + 词表裁剪 110k + 结构化剪枝 24→12 层/FFN 6144→3072 → 0.685B 学生底座。
+- **Phase 2**：9B 教师离线导出 top-k logits + 离线 KD（CE + forward-KL），heal 剪枝、做成强离线中英翻译器。
+- **Phase 3**：wait-k 流式数据构造 + 流式微调 + 流式解码 + on-policy OPD（reverse-KL，治暴露偏差）。
+- **Phase 4**：量化 + 端侧导出（llama.cpp/MNN） + 质量(BLEU/COMET)/延迟(AL) 联合评测。
