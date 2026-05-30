@@ -13,6 +13,16 @@ class PruneConfig(BaseModel):
     keep_languages: list[str]
     reserve_languages: list[str] = []
     drop_vision: bool = True
+    # 结构目标（勘探后确定）
+    hidden_size: int = 2048
+    target_layers: int = 12
+    target_ffn: int = 3072
+    full_attention_interval: int = 4
+    # 策略
+    layer_selection: str = "block_uniform"
+    ffn_selection: str = "magnitude"
+    vocab_selection: str = "freq_multilingual"
+    reversible: bool = True
 
 
 def load_config(path: str | Path, schema: Type[T]) -> T:

@@ -52,7 +52,7 @@ print(type(cfg.text_config))           # 纯文本子配置类名
 - 验证：参数量 = 1.882B − 0.331B = 1.882B→1.551B（含 24 层、110k 前的全词表）；前向一句话 logits 非 NaN。
 
 ### Task 2 — 减层 `prune_layers.py`
-- 策略 `block_uniform`：原 24 层 = 6 个 `[L,L,L,F]` 块，**等距保留第 0/2/4 块对应的连续段**，即保留原 idx `{0,1,2,3, 8,9,10,11, 16,17,18,19}`（3 个完整 `[L,L,L,F]` 块）。
+- 策略 `block_uniform`：原 24 层 = 6 个 `[L,L,L,F]` 块，**端点+中间均匀保留第 0/2/5 块**（含首块与末块，保留靠近输入与输出的层），即原 idx `{0,1,2,3, 8,9,10,11, 20,21,22,23}`（3 个完整 `[L,L,L,F]` 块）。
 - 新层重编号 0–11，full-attn 落在新 idx 3/7/11，`layer_types` 与 `full_attention_interval=4` 自洽。
 - 权重：直接搬保留层（含 `linear_attn`/`self_attn` 内部，不改）。
 - 纯函数 `select_layer_indices(num_layers=24, target=12, interval=4) -> list[int]`，可单测（不需 GPU）。
