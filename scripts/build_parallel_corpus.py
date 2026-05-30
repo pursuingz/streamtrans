@@ -16,11 +16,22 @@ from pathlib import Path
 
 from streamtrans.data.parallel_corpus import clean_pair
 
-# (id, load_args, load_kwargs, kind)
+# (id, load_args, schema, kind) —— 均为 parquet 原生数据集（新版 datasets 已弃脚本型）
 SOURCES = [
-    ("open_subtitles", ("open_subtitles",), {"lang1": "en", "lang2": "zh"}, "spoken"),
-    ("opus-100", ("Helsinki-NLP/opus-100", "en-zh"), {}, "general"),
+    # 字幕/口语域，parquet：列 english/non_english(简中)
+    ("opensubtitles", ("sentence-transformers/parallel-sentences-opensubtitles", "en-zh_cn"), "st_pair", "spoken"),
+    # 通用，parquet：列 translation={en, zh}
+    ("opus-100", ("Helsinki-NLP/opus-100", "en-zh"), "translation", "general"),
 ]
+
+
+def extract_pair(ex, schema):
+    if schema == "translation":
+        tr = ex.get("translation") or {}
+        return tr.get("en", ""), tr.get("zh", "")
+    if schema == "st_pair":
+        return ex.get("english", ""), ex.get("non_english", "")
+    return "", ""
 
 
 def keep(src: str, tgt: str, min_len=1, max_len=200, max_ratio=4.0) -> bool:
@@ -53,20 +64,18 @@ def main():
 
     summary, written = [], 0
     with out.open("w", encoding="utf-8") as f:
-        for sid, load_args, load_kwargs, kind in SOURCES:
+        for sid, load_args, schema, kind in SOURCES:
             want = targets.get(kind, 0)
             if want <= 0:
                 continue
             try:
-                ds = load_dataset(*load_args, **load_kwargs, split="train",
-                                  streaming=True, trust_remote_code=True)
+                ds = load_dataset(*load_args, split="train", streaming=True)
             except Exception as e:  # noqa: BLE001
                 msg = f"[skip] {sid} ({kind}): {type(e).__name__}: {e}"
                 print(msg); summary.append(msg); continue
             got = 0
             for ex in ds:
-                tr = ex.get("translation") or {}
-                en, zh = clean_pair(tr.get("en", ""), tr.get("zh", ""))
+                en, zh = clean_pair(*extract_pair(ex, schema))
                 if not keep(zh, en):
                     continue
                 f.write(json.dumps({"src": zh, "tgt": en, "direction": "zh2en"}, ensure_ascii=False) + "\n")
