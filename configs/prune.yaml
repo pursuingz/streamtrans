@@ -5,3 +5,17 @@ target_vocab_size: 110000        # 中英为主 + 预留主要语言
 keep_languages: [zh, en]          # 第一版训练语言
 reserve_languages: [ja, ko, fr, de, es, ru]  # 词表预留、暂不训练
 drop_vision: true
+
+# 结构目标（勘探结论 2026-05-30 后确定，中庸取向）
+# 现状 2B 纯文本：24 层 / hidden 2048 / FFN 6144 / vocab 248320 = 1.882B
+# 目标：剥视觉 + 裁词表 + 减层 + 缩 FFN → ≈0.69B（transformer ≈0.46B）
+hidden_size: 2048                 # 不变（绕开 head_dim/mrope 风险）
+target_layers: 12                 # 24 → 12，保持 [linear,linear,linear,full]×3 节律
+target_ffn: 3072                  # 6144 → 3072（FFN 是层内大头，缩 FFN 杠杆最高）
+full_attention_interval: 4        # 节律不变，full-attn 落在新 idx 3/7/11
+
+# 剪枝策略
+layer_selection: block_uniform    # 按原节律等距保留 3 个 [L,L,L,F] 块
+ffn_selection: magnitude          # 按 |gate_proj 行范数| 选 top-3072 神经元（待加校准数据后可改 activation）
+vocab_selection: freq_multilingual # 全部 special + 覆盖 reserve 语言样本的 token 频次补满
+reversible: true                  # 存 old→new id 映射 + 原始 embedding 行，扩语言可逆
