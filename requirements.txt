@@ -8,3 +8,6 @@ sacrebleu>=2.4
 pydantic>=2.6
 PyYAML>=6.0
 pytest>=8.0
+# Phase 2 蒸馏：accelerate(device_map/量化加载必需) + bitsandbytes(4bit教师/8bit优化器)
+accelerate>=0.30
+bitsandbytes>=0.43
