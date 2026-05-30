@@ -123,7 +123,18 @@ def main():
         cfg.target_layers, cfg.target_ffn, len(keep_ids), cfg.full_attention_interval
     ).items():
         setattr(tcfg, k, v)
+    # 裁词表后特殊 token id 必须经 vocab_map 重映射到新 id（否则越界，generation 失效）
+    for attr in ("eos_token_id", "bos_token_id", "pad_token_id"):
+        v = getattr(tcfg, attr, None)
+        if isinstance(v, int):
+            setattr(tcfg, attr, vmap.get(v))  # 不在 keep 集则置 None
     student = Qwen3_5ForCausalLM(tcfg)
+    gc = getattr(student, "generation_config", None)
+    if gc is not None:
+        for attr in ("eos_token_id", "bos_token_id", "pad_token_id"):
+            v = getattr(gc, attr, None)
+            if isinstance(v, int):
+                setattr(gc, attr, vmap.get(v))
     missing, unexpected = student.load_state_dict(sd, strict=False)
     student.tie_weights()  # tie 后 lm_head 指向(已切词表的) embed
     # tie 模式下 lm_head.weight 落在 missing 还是 unexpected 取决于 transformers 内部，两边都容忍
