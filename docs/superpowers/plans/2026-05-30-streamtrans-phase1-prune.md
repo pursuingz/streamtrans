@@ -97,7 +97,7 @@ python scripts/run_prune.py --config configs/prune.yaml                         
 2. **mrope text-only 退化**：剥视觉后 position_ids 应退为 1D，但实现走 mrope 分支；Task1 验证前向，若异常则在 config 固定 `mrope_section` 走纯时间段。
 3. **tied 切词表**：切 `embed_tokens` 后须确认 `lm_head` 同步（tie 关系不被切片破坏）；Task4 round-trip 测试覆盖。
 4. **减层/缩FFN 后质量塌陷**：Phase 1 不解决，靠 Phase 2 OPD；Task6 最小 heal 防止初始化过差。
-5. **端侧框架不支持该线性注意力**（CONCLUSIONS §7，全局最大风险）：与 Phase 1 解耦，但建议**并行联网核实 llama.cpp/MNN 现状**，避免 Phase 4 才发现死路。
+5. **端侧框架支持**（CONCLUSIONS §7，已核实 2026-05-30）：llama.cpp（`ggml_gated_delta_net`）与 MNN 3.4.1（Linear Attention 算子全后端）**均已支持** Qwen3.5 线性注意力，风险已降级。**Phase 1 硬约束**：剪枝后 config 必须仍被转换器识别为 qwen3_5 架构——保留 `model_type=qwen3_5_text` / `layer_types` 节律 / `linear_attn` 维度字段，只改层数/FFN/词表，不重命名模块、不动 linear_attn 内部。Phase 4 须实测 GGUF+MNN 转换跑通。
 
 ## 产物与解耦
 - 输出 `checkpoints/pruned_<date>/`（不入 git）+ `vocab_map.json`/`embed_original.pt`（可逆凭据）。

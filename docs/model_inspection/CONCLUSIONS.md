@@ -48,11 +48,14 @@
 - PyPI 稳定版不够，需 5.10.0.dev0（GitHub dev）；服务器已装好
 - → spec §8 风险2「能否加载」**已解除**
 
-## 7. 端侧可行性预判（spec §8 风险2 的另一半）—— 待联网核实，列为风险跟踪
-- **llama.cpp / MNN 对该 SSM 变体的支持**：`qwen3_5` 线性注意力（`linear_attn` + conv1d + in_proj_qkv/z/b/a，Mamba2/GatedLinear 家族）是 transformers 5.10 dev 新增，**端侧推理框架大概率尚未支持**。这是当前**最大未解风险**，需在 Phase 1 前或并行联网核实。
-- **mrope（多模态 RoPE）**：`mrope_interleaved=true`、`mrope_section=[11,11,10]`、`partial_rotary_factor=0.25`。剥视觉塔后纯文本 position_ids 退化为 1D，理论上等价普通 RoPE 的时间段，但实现仍走 mrope 分支，需验证 text-only 路径。
+## 7. 端侧可行性预判（spec §8 风险2 的另一半）—— 已联网核实（2026-05-30），风险大幅下降
+- **llama.cpp：已支持。** 已实现 `ggml_gated_delta_net` + `build_mamba2_layer`（CUDA/Vulkan 优化），HF 已有 `Qwen3.5-2B-GGUF`，issue tracker 有人实跑 Qwen3.5（#20225）。需用最新版以含新算子。
+- **MNN：已支持，且专门适配。** MNN **3.4.1** 核心主题之一即「Qwen3.5 Model Support with Linear Attention」：新增 Linear Attention 算子覆盖 CPU/Metal/OpenCL/Vulkan，支持线性注意力循环状态 disk load/store；另有 Arm KleidiAI × MNN × Qwen 边缘集成。**MNN 是更对口的移动端目标。**
+- **架构吻合确认**：社区把 Qwen3.5 线性注意力描述为 **Gated DeltaNet，线性:全 = 3:1**，与我们 config 的 `full_attention_interval=4`（3 linear+1 full）一致 → 两引擎支持的正是本架构。
+- **mrope**：剥视觉后纯文本 position_ids 退为 1D，理论等价普通 RoPE 时间段；Task1 验证 text-only 前向。
 - **MTP**：不在前向图，端侧导出无影响。
-- **初步结论**：训练侧用 Qwen3.5 完全可行（剪枝/蒸馏不依赖端侧框架）；**端侧导出是真风险点**——若 llama.cpp/MNN 长期不支持该线性注意力，需在 Phase 4 评估「自研算子」或「回退到标准 attention 架构」。建议：Phase 1-3 照常推进，Phase 4 前必须有端侧 PoC 兜底。
+- **残留约束（重要）**：剪枝后的 student **config 必须仍被转换器识别为 qwen3_5 架构**——保留 `model_type=qwen3_5_text`、`layer_types` 节律、`linear_attn` 维度字段，只改层数/FFN/词表这些标准维度。**不得重命名模块或改动 linear_attn 内部**，否则 GGUF/MNN 转换器会不认。
+- **结论**：训练侧用 Qwen3.5 可行；端侧落地风险从「未知」降为「可控」——两大引擎均已支持。**Phase 4 仍须实测转换一遍**（剪枝后的非标准层数/FFN 走一遍 GGUF + MNN 转换并跑通），但不再是项目级阻断风险。
 
 ---
 
