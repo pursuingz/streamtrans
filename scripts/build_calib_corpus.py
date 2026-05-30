@@ -12,6 +12,8 @@
 保证裁出的 110k 词表覆盖目标语言全集（扩语言时只补数据不动结构）。
 """
 import argparse
+import os
+import sys
 from pathlib import Path
 
 # 与 prune.yaml keep_languages + reserve_languages 对齐：中英 + 日韩 + 主要欧洲语言
@@ -70,3 +72,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # datasets 流式模式的后台预取线程会在解释器 finalize 时崩(PyGILState_Release)。
+    # 文件已在 main 内 with 块关闭写盘完毕，直接 os._exit 绕过有问题的线程清理。
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
