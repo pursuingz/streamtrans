@@ -67,7 +67,7 @@ print(type(cfg.text_config))           # 纯文本子配置类名
 
 ### Task 4 — 裁词表 `prune_vocab.py`（可逆，复用已写的 `data/vocab_stats.py`）
 - keep 集 = 全部 special/added token + 覆盖 `reserve_languages` 样本的 token 频次补满到 110000（`select_keep_tokens` 已实现）。
-- 校准语料：中英为主 + 日韩法德西俄各少量（只为统计 token 命中，不需平行）。来源与采样脚本在 Task 4 内定。
+- 校准语料：中英 + 日韩法德西俄各若干（只为统计 token 命中，不需平行）。`scripts/build_calib_corpus.py` 流式拉 wikimedia/wikipedia 各语言单语文本 → `data/calib_multiling.txt`（gitignore）。
 - 切 `embed_tokens` 行（tied → `lm_head` 自动跟随）。
 - **可逆产物**：`vocab_map.json`（old_id → new_id）+ `embed_original.pt`（原始 248320×2048 行，扩语言时按 map 回填新 token）。
 - 纯函数部分可单测；切权重部分用小词表 mock 验证 round-trip。
