@@ -1,8 +1,5 @@
 # Phase 2 离线 KD 配置
-# 教师权重用 ModelScope 下到本地(HF 对 Qwen3.5 的 Xet 仓库国内下不动)：
-#   pip install modelscope
-#   modelscope download --model Qwen/Qwen3.5-9B --local_dir models/Qwen3.5-9B
-teacher_model: models/Qwen3.5-9B
+teacher_model: Qwen/Qwen3.5-9B
 student_ckpt: checkpoints/pruned_20260530
 vocab_map: checkpoints/pruned_20260530/vocab_map.json
 

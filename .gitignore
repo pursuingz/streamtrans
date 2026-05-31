@@ -1,7 +1,6 @@
 # 数据与模型产物，不入库（锚定仓库根，避免误伤 src/streamtrans/data 等源码包）
 /data/
 /checkpoints/
-/models/                 # 下载的教师/底座权重（ModelScope 等）
 *.bin
 *.safetensors
 *.gguf
