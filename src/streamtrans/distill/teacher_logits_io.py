@@ -45,9 +45,10 @@ def map_and_renormalize_topk(top_ids_old, top_logits, old2new):
     keep_pos, new_ids = remap_topk_ids(list(top_ids_old), old2new)
     if not keep_pos:  # 极端：top-k 全落集外（中英数据几乎不会）
         return torch.empty(0, dtype=torch.long), torch.empty(0, dtype=torch.float16)
-    sub = top_logits[torch.tensor(keep_pos, dtype=torch.long)]
+    # top_logits 在 cuda 上；落盘前一律搬回 cpu，保证后续 pad/stack/torch.save 设备一致
+    sub = top_logits[torch.tensor(keep_pos, dtype=torch.long, device=top_logits.device)]
     logp = F.log_softmax(sub.float(), dim=-1)
-    return torch.tensor(new_ids, dtype=torch.long), logp.to(torch.float16)
+    return torch.tensor(new_ids, dtype=torch.long), logp.to(torch.float16).cpu()
 
 
 class ShardWriter:
@@ -61,8 +62,8 @@ class ShardWriter:
         self._sizes: List[int] = []
         self._shard_i = 0
 
-    def add(self, ids, logp):
-        self._buf.append({"ids": ids, "logp": logp})
+    def add(self, record: dict):
+        self._buf.append(record)
         if len(self._buf) >= self.shard_size:
             self._flush()
 
