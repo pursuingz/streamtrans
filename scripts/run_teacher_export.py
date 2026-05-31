@@ -66,7 +66,9 @@ def main():
     writer = ShardWriter(out_dir, shard_size=cfg.shard_size)
 
     n = 0
-    for r in rows:
+    from tqdm import tqdm
+
+    for r in tqdm(rows, desc="[teacher] export", unit="ex"):
         # old-id 序列（教师空间）
         p_old = tok.encode(render_prompt(r["src"], r["direction"]), add_special_tokens=False)
         t_old = tok.encode(r["tgt"], add_special_tokens=False) + [old_eos]
