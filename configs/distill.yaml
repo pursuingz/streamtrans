@@ -3,7 +3,7 @@ teacher_model: Qwen/Qwen3.5-9B
 student_ckpt: checkpoints/pruned_20260530
 vocab_map: checkpoints/pruned_20260530/vocab_map.json
 
-corpus_file: data/parallel_zh_en.jsonl        # build_parallel_corpus.py 产出
+corpus_file: data/train_zh_en.jsonl           # split_corpus.py 切出的 train(test 对教师不可见，防评测泄漏)
 teacher_logits_dir: data/teacher_logits        # 教师 top-k shard（不入 git）
 
 # 蒸馏超参
