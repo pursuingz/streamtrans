@@ -52,9 +52,12 @@ def main():
     opt = build_optimizer(student.parameters(), cfg.lr)
     opt.zero_grad()
 
+    from tqdm import tqdm
+
     step, micro = 0, 0
     order = list(range(n_ex))
     losses: list[float] = []
+    pbar = tqdm(total=steps, desc="[distill]", unit="step")
     while step < steps:
         random.shuffle(order)
         for gi in order:
@@ -84,10 +87,11 @@ def main():
                 opt.zero_grad()
                 step += 1
                 losses.append(float(total))
-                if step % 10 == 0 or args.smoke:
-                    print(f"  step {step}/{steps}  loss={float(total):.4f} ce={float(ce):.4f} kd={float(kd):.4f}")
+                pbar.update(1)
+                pbar.set_postfix(loss=f"{float(total):.3f}", ce=f"{float(ce):.3f}", kd=f"{float(kd):.3f}")
                 if step >= steps:
                     break
+    pbar.close()
 
     out_dir = Path("checkpoints") / ("distilled_smoke" if args.smoke else "distilled_20260530")
     student.config.use_cache = True
