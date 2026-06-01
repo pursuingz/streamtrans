@@ -40,7 +40,8 @@ class DistillConfig(BaseModel):
     shard_size: int = 10000
     batch_size: int = 8
     grad_accum: int = 4
-    lr: float = 2.0e-4
+    lr: float = 5.0e-5
+    warmup_ratio: float = 0.05            # 前 5% step 线性 warmup，防开局发散
     steps: int = 2000
     grad_checkpointing: bool = True
     teacher_4bit: bool = True

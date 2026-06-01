@@ -18,7 +18,8 @@ shard_size: 10000
 # 训练（24GB：8bit 优化器 + 梯度检查点）
 batch_size: 8
 grad_accum: 4
-lr: 2.0e-4
+lr: 5.0e-5
+warmup_ratio: 0.05       # 前 5% step 线性 warmup，防开局发散
 steps: 2000
 grad_checkpointing: true
 teacher_4bit: true       # 9B 教师 nf4 离线导出

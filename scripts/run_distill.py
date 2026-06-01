@@ -52,6 +52,12 @@ def main():
     opt = build_optimizer(student.parameters(), cfg.lr)
     opt.zero_grad()
 
+    from transformers import get_cosine_schedule_with_warmup
+
+    warmup = int(steps * cfg.warmup_ratio)
+    sched = get_cosine_schedule_with_warmup(opt, num_warmup_steps=warmup, num_training_steps=steps)
+    print(f"[distill] lr={cfg.lr} warmup={warmup} step, cosine 衰减")
+
     from tqdm import tqdm
 
     step, micro = 0, 0
@@ -84,11 +90,13 @@ def main():
             if micro % cfg.grad_accum == 0:
                 torch.nn.utils.clip_grad_norm_(student.parameters(), 1.0)
                 opt.step()
+                sched.step()
                 opt.zero_grad()
                 step += 1
                 losses.append(float(total))
                 pbar.update(1)
-                pbar.set_postfix(loss=f"{float(total):.3f}", ce=f"{float(ce):.3f}", kd=f"{float(kd):.3f}")
+                pbar.set_postfix(lr=f"{sched.get_last_lr()[0]:.1e}", loss=f"{float(total):.3f}",
+                                 ce=f"{float(ce):.3f}", kd=f"{float(kd):.3f}")
                 if step >= steps:
                     break
     pbar.close()
