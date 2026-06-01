@@ -58,11 +58,15 @@ def main():
     sched = get_cosine_schedule_with_warmup(opt, num_warmup_steps=warmup, num_training_steps=steps)
     print(f"[distill] lr={cfg.lr} warmup={warmup} step, cosine 衰减")
 
+    from collections import deque
+
     from tqdm import tqdm
 
     step, micro = 0, 0
     order = list(range(n_ex))
     losses: list[float] = []
+    recent = deque(maxlen=50)   # 近 50 step 滑动均值，压单点 loss 噪声、看真实趋势
+    win: list[float] = []       # 当前 grad_accum 窗口内各 micro-batch 的 loss
     pbar = tqdm(total=steps, desc="[distill]", unit="step")
     while step < steps:
         random.shuffle(order)
@@ -86,6 +90,7 @@ def main():
                 pred, gold, t_ids, t_logp, cfg.alpha_ce, cfg.beta_kd, cfg.temperature
             )
             (total / cfg.grad_accum).backward()
+            win.append(float(total))
             micro += 1
             if micro % cfg.grad_accum == 0:
                 torch.nn.utils.clip_grad_norm_(student.parameters(), 1.0)
@@ -93,10 +98,13 @@ def main():
                 sched.step()
                 opt.zero_grad()
                 step += 1
-                losses.append(float(total))
+                step_loss = sum(win) / len(win)   # 这一 step 内 grad_accum 个样本的均值
+                win.clear()
+                losses.append(step_loss)
+                recent.append(step_loss)
                 pbar.update(1)
-                pbar.set_postfix(lr=f"{sched.get_last_lr()[0]:.1e}", loss=f"{float(total):.3f}",
-                                 ce=f"{float(ce):.3f}", kd=f"{float(kd):.3f}")
+                pbar.set_postfix(lr=f"{sched.get_last_lr()[0]:.1e}",
+                                 avg50=f"{sum(recent) / len(recent):.3f}", loss=f"{step_loss:.3f}")
                 if step >= steps:
                     break
     pbar.close()
