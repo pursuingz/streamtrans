@@ -24,6 +24,7 @@ def main():
     ap.add_argument("--base", default="Qwen/Qwen3.5-2B", help="取 tokenizer")
     ap.add_argument("--vocab-map", required=True)
     ap.add_argument("--max-new", type=int, default=256)
+    ap.add_argument("--min-new", type=int, default=0, help="强制最少生成 token(诊断过早 eos)")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--show", type=int, default=0, help="打印前 N 条 src/hyp/ref 供诊断")
     args = ap.parse_args()
@@ -45,8 +46,8 @@ def main():
         p_new = remapper.encode(tok, render_prompt(r["src"], r["direction"]))
         ids = torch.tensor([p_new], device=dev)
         with torch.no_grad():
-            gen = model.generate(ids, max_new_tokens=args.max_new, do_sample=False,
-                                 eos_token_id=eos_new, pad_token_id=eos_new)
+            gen = model.generate(ids, max_new_tokens=args.max_new, min_new_tokens=args.min_new,
+                                 do_sample=False, eos_token_id=eos_new, pad_token_id=eos_new)
         out_new = gen[0, ids.shape[1]:].tolist()
         hyp = remapper.decode(tok, out_new, skip_special_tokens=True)
         hyps.append(hyp)
