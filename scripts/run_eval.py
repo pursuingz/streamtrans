@@ -25,6 +25,7 @@ def main():
     ap.add_argument("--vocab-map", required=True)
     ap.add_argument("--max-new", type=int, default=256)
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--show", type=int, default=0, help="打印前 N 条 src/hyp/ref 供诊断")
     args = ap.parse_args()
 
     from transformers import AutoTokenizer, Qwen3_5ForCausalLM
@@ -40,17 +41,24 @@ def main():
         rows = rows[: args.limit]
 
     hyps, refs = [], []
-    for r in rows:
+    for i, r in enumerate(rows):
         p_new = remapper.encode(tok, render_prompt(r["src"], r["direction"]))
         ids = torch.tensor([p_new], device=dev)
         with torch.no_grad():
             gen = model.generate(ids, max_new_tokens=args.max_new, do_sample=False,
                                  eos_token_id=eos_new, pad_token_id=eos_new)
         out_new = gen[0, ids.shape[1]:].tolist()
-        hyps.append(remapper.decode(tok, out_new, skip_special_tokens=True))
+        hyp = remapper.decode(tok, out_new, skip_special_tokens=True)
+        hyps.append(hyp)
         refs.append(r["tgt"])
+        if i < args.show:
+            print(f"--- [{i}] {r['direction']}  (prompt {len(p_new)} tok, gen {len(out_new)} tok)")
+            print(f"  SRC : {r['src']}")
+            print(f"  HYP : {hyp!r}")
+            print(f"  REF : {r['tgt']}")
 
-    print(f"samples={len(hyps)}  BLEU={corpus_bleu(hyps, refs):.2f}  chrF={corpus_chrf(hyps, refs):.2f}")
+    avg_len = sum(len(h) for h in hyps) / max(1, len(hyps))
+    print(f"samples={len(hyps)}  BLEU={corpus_bleu(hyps, refs):.2f}  chrF={corpus_chrf(hyps, refs):.2f}  avg_hyp_chars={avg_len:.1f}")
 
 
 if __name__ == "__main__":
