@@ -42,8 +42,10 @@ def main():
     if args.limit:
         rows = rows[: args.limit]
 
+    from tqdm import tqdm
+
     hyps, refs, recs = [], [], []
-    for i, r in enumerate(rows):
+    for i, r in enumerate(tqdm(rows, desc="[eval] generate", unit="ex")):
         p_new = remapper.encode(tok, render_prompt(r["src"], r["direction"]))
         ids = torch.tensor([p_new], device=dev)
         with torch.no_grad():
