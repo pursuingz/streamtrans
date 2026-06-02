@@ -15,6 +15,9 @@ venv/
 # 本地 IDE / harness 配置
 .claude/
 
+# 评测/中间产物（根目录），不入库
+/eval_*.jsonl
+
 # 杂项
 .DS_Store
 *.log
