@@ -1,10 +1,10 @@
 # Phase 2 离线 KD 配置
 teacher_model: Qwen/Qwen3.5-9B
-student_ckpt: checkpoints/pruned_20260530
-vocab_map: checkpoints/pruned_20260530/vocab_map.json
+student_ckpt: checkpoints/pruned_20260602      # 重建词表(80k,中英OOV≈0)后的新底座
+vocab_map: checkpoints/pruned_20260602/vocab_map.json
 
 corpus_file: data/train_zh_en.jsonl           # split_corpus.py 切出的 train(test 对教师不可见，防评测泄漏)
-teacher_logits_dir: data/teacher_logits        # 教师 top-k shard（不入 git）
+teacher_logits_dir: data/teacher_logits_v2     # 新词表的教师 top-k shard（旧 teacher_logits 已废,new-id 变了）
 
 # 蒸馏超参
 topk: 64
