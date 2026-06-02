@@ -25,6 +25,8 @@ def main():
     ap.add_argument("--vocab-map", required=True)
     ap.add_argument("--max-new", type=int, default=256)
     ap.add_argument("--min-new", type=int, default=0, help="强制最少生成 token(诊断过早 eos)")
+    ap.add_argument("--rep-penalty", type=float, default=1.0, help="重复惩罚(>1压退化,如1.3)")
+    ap.add_argument("--no-repeat-ngram", type=int, default=0, help="禁止重复的 n-gram 长度(如3)")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--show", type=int, default=0, help="打印前 N 条 src/hyp/ref 供诊断")
     ap.add_argument("--out", default=None, help="把每条 src/hyp/ref 写 JSONL,末行写 summary")
@@ -50,7 +52,9 @@ def main():
         ids = torch.tensor([p_new], device=dev)
         with torch.no_grad():
             gen = model.generate(ids, max_new_tokens=args.max_new, min_new_tokens=args.min_new,
-                                 do_sample=False, eos_token_id=eos_new, pad_token_id=eos_new)
+                                 do_sample=False, eos_token_id=eos_new, pad_token_id=eos_new,
+                                 repetition_penalty=args.rep_penalty,
+                                 no_repeat_ngram_size=args.no_repeat_ngram)
         out_new = gen[0, ids.shape[1]:].tolist()
         hyp = remapper.decode(tok, out_new, skip_special_tokens=True)
         hyps.append(hyp)
