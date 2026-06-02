@@ -71,6 +71,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="configs/distill.yaml")
     ap.add_argument("--smoke", action="store_true")
+    ap.add_argument("--steps", type=int, default=None, help="覆盖 config 的 steps")
+    ap.add_argument("--batch-size", type=int, default=None, help="覆盖 config 的 batch_size")
     args = ap.parse_args()
     cfg = load_config(args.config, DistillConfig)
 
@@ -87,8 +89,8 @@ def main():
     logits_dir = cfg.teacher_logits_dir + ("_smoke" if args.smoke else "")
     reader = ShardReader(logits_dir)
     n_ex = len(reader)
-    steps = 30 if args.smoke else cfg.steps
-    B = cfg.batch_size
+    steps = 30 if args.smoke else (args.steps if args.steps is not None else cfg.steps)
+    B = args.batch_size if args.batch_size is not None else cfg.batch_size
     print(f"[distill] {n_ex} 条教师样本, batch={B} grad_accum={cfg.grad_accum} "
           f"(有效 batch {B * cfg.grad_accum}), 目标 {steps} step")
 
