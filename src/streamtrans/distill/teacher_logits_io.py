@@ -99,11 +99,19 @@ class ShardReader:
     def __len__(self):
         return self.total
 
-    def get(self, global_idx: int):
+    @property
+    def num_shards(self) -> int:
+        return len(self.shard_sizes)
+
+    def load_shard(self, si: int) -> list:
+        """整片读入（带单 shard 缓存）。批处理按 shard 内打乱，避免全局 shuffle 反复重载。"""
         import torch
 
-        si, li = locate(self.shard_sizes, global_idx)
         if si != self._cache_i:
             self._cache = torch.load(self.dir / f"shard_{si:05d}.pt")
             self._cache_i = si
-        return self._cache[li]
+        return self._cache
+
+    def get(self, global_idx: int):
+        si, li = locate(self.shard_sizes, global_idx)
+        return self.load_shard(si)[li]
