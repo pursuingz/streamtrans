@@ -46,7 +46,20 @@ def main():
     eos_new = remapper.old2new.get(int(old_eos))
     if eos_new is None:
         raise SystemExit("eos 不在 keep 集；检查 vocab_map 是否含特殊 token")
-    remapper.unk_new_id = eos_new  # 输入序列 OOV 兜底(中英下几乎不触发)，保证长度对齐
+    # OOV 兜底 id：绝不能用 eos(会把 OOV 目标 token 训成假 eos→过早 eos,曾踩此坑)。
+    # 取 pad/unk(已重映射),否则退到 new-id 0(非 eos,不致早停)。重建词表后训练侧 OOV≈0,基本不触发。
+    oov_new = None
+    for cand in (getattr(tok, "unk_token_id", None), getattr(tok, "pad_token_id", None)):
+        if cand is not None:
+            oov_new = remapper.old2new.get(int(cand))
+            if oov_new is not None and oov_new != eos_new:
+                break
+            oov_new = None
+    if oov_new is None:
+        oov_new = 0
+    remapper.unk_new_id = oov_new  # 输入序列 OOV 兜底，保证长度对齐(必须给 id,不能丢)
+    print(f"[teacher] eos_new={eos_new}  OOV 兜底 id={oov_new}(非 eos)")
+    oov_hits = 0  # 统计 OOV 命中数,验证新词表是否真的 OOV≈0
 
     print(f"[teacher] 4-bit 加载 {cfg.teacher_model}")
     bnb = BitsAndBytesConfig(
@@ -92,9 +105,10 @@ def main():
 
         if not t_ids_rows:
             continue
-        # 学生 new-id 序列（位置对齐，unk 兜底不丢 token）
+        # 学生 new-id 序列（位置对齐，OOV 用 oov_new 兜底不丢 token、不污染 eos）
         inp_new = remapper.map_ids(inp_old)
-        lab_new = [-100 if x == -100 else remapper.old2new.get(int(x), eos_new) for x in lab_old]
+        oov_hits += sum(1 for x in lab_old if x != -100 and int(x) not in remapper.old2new)
+        lab_new = [-100 if x == -100 else remapper.old2new.get(int(x), oov_new) for x in lab_old]
         writer.add(
             {
                 "input_ids": torch.tensor(inp_new, dtype=torch.long),
@@ -105,7 +119,7 @@ def main():
         )
         n += 1
     writer.close()
-    print(f"[teacher] 导出 {n} 条 -> {out_dir}")
+    print(f"[teacher] 导出 {n} 条 -> {out_dir}  (target 位 OOV 命中 {oov_hits} 个,新词表应≈0)")
 
 
 if __name__ == "__main__":

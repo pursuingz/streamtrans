@@ -2,7 +2,10 @@
 
 用法:
   python scripts/run_prune.py --config configs/prune.yaml --smoke
-  python scripts/run_prune.py --config configs/prune.yaml --calib-file data/calib_multiling.txt --out checkpoints/pruned_20260530
+  python scripts/run_prune.py --config configs/prune.yaml \
+      --corpus-file data/train_zh_en.jsonl --test-file data/test_zh_en.jsonl \
+      --out checkpoints/pruned_20260602
+  # 频次铁律：训练语料(src+tgt)token 全部强制保留(OOV≈0)；预留语言可选 --calib-file 填剩余预算。
 
 链路：load full(ConditionalGeneration) → strip视觉 → 选层 → 切FFN → 切词表
      → 灌入新建 Qwen3_5ForCausalLM → save_pretrained + 可逆产物(vocab_map.json, embed_original.pt)。
@@ -62,11 +65,28 @@ def build_freq(tokenizer, texts):
     return count_token_freq(texts, lambda t: tokenizer.encode(t, add_special_tokens=False))
 
 
+def corpus_texts_from_jsonl(path: str) -> list[str]:
+    """读平行语料 jsonl，src 与 tgt 双侧都收集（两个方向都会作输入/输出）。"""
+    out: list[str] = []
+    for ln in Path(path).read_text(encoding="utf-8").splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        r = json.loads(ln)
+        out.append(r["src"])
+        out.append(r["tgt"])
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="configs/prune.yaml")
     ap.add_argument("--out", default=None, help="输出目录；默认 checkpoints/pruned_<date>")
-    ap.add_argument("--calib-file", default=None, help="多语言校准语料(一行一句)；--smoke 时忽略")
+    ap.add_argument("--corpus-file", default=None,
+                    help="训练语料 jsonl(含 train+可加 test)；其 src+tgt 全部 token 强制保留(OOV≈0)")
+    ap.add_argument("--test-file", default=None, help="测试语料 jsonl(可选)；token 一并强制保留,eval 零 OOV")
+    ap.add_argument("--calib-file", default=None,
+                    help="预留语言校准语料(一行一句,可选)；只用其频次填中英之外的剩余预算")
     ap.add_argument("--smoke", action="store_true")
     args = ap.parse_args()
 
@@ -87,18 +107,28 @@ def main():
     src_layers = full_cfg.text_config.num_hidden_layers
 
     print("[2/6] 统计词频 + 构造 keep 集")
+    # keep 集铁律(见 CLAUDE.md 决策2)：训练语料(src+tgt)用到的 token 全部强制保留(force_keep)，
+    # 中英 OOV≈0；预留语言只用 calib 频次填剩余预算，绝不挤占中英。
     if args.smoke:
-        texts = SMOKE_CALIB
+        corpus_texts = SMOKE_CALIB
+        calib_texts: list[str] = []
     else:
-        if not args.calib_file:
-            raise SystemExit("非 smoke 模式必须给 --calib-file 多语言校准语料")
-        texts = [ln.strip() for ln in Path(args.calib_file).read_text(encoding="utf-8").splitlines() if ln.strip()]
+        if not args.corpus_file:
+            raise SystemExit("非 smoke 模式必须给 --corpus-file 训练语料(其 token 强制保留)")
+        corpus_texts = corpus_texts_from_jsonl(args.corpus_file)
+        if args.test_file:
+            corpus_texts += corpus_texts_from_jsonl(args.test_file)
+        calib_texts = ([ln.strip() for ln in Path(args.calib_file).read_text(encoding="utf-8").splitlines()
+                        if ln.strip()] if args.calib_file else [])
     special_ids = gather_special_ids(tok, full_cfg)
-    freq = build_freq(tok, texts)
-    keep_ids = build_keep_ids(freq, special_ids, cfg.target_vocab_size)
+    force_keep = set(build_freq(tok, corpus_texts).keys())   # 语料必用 token,强制保留
+    fill_freq = build_freq(tok, calib_texts) if calib_texts else {}   # 仅填剩余预算(预留语言)
+    keep_ids = build_keep_ids(fill_freq, special_ids, cfg.target_vocab_size, force_keep=force_keep)
     vmap = build_vocab_map(keep_ids)
-    print(f"      special={len(special_ids)}  keep={len(keep_ids)} / target={cfg.target_vocab_size}"
-          f"  (smoke 下 keep 远小于 target 属正常，样本小)")
+    n_reserve = max(0, len(keep_ids) - len(force_keep | set(special_ids)))
+    print(f"      special={len(special_ids)}  force_keep(语料)={len(force_keep)}  "
+          f"keep={len(keep_ids)} / target={cfg.target_vocab_size}  预留语言填入≈{n_reserve}"
+          f"  (smoke 下样本小,数值仅自检用)")
 
     print("[3/6] 加载完整权重 (ConditionalGeneration, fp16)")
     full = AutoModelForImageTextToText.from_pretrained(
@@ -167,8 +197,8 @@ def main():
     assert logits.shape == (1, 8, len(keep_ids)), logits.shape
     assert torch.isfinite(logits).all(), "logits 含 NaN/Inf"
     print(f"      OK  logits.shape={tuple(logits.shape)}  params={n_params/1e9:.3f}B")
-    if not args.smoke and not (0.66e9 <= n_params <= 0.72e9):
-        raise RuntimeError(f"参数量 {n_params/1e9:.3f}B 不在 [0.66,0.72]B")
+    if not args.smoke and not (0.55e9 <= n_params <= 0.72e9):
+        raise RuntimeError(f"参数量 {n_params/1e9:.3f}B 不在 [0.55,0.72]B(80k 词表约 0.62B,110k 约 0.685B)")
 
 
 if __name__ == "__main__":

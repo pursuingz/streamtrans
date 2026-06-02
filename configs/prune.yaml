@@ -1,14 +1,14 @@
 # Phase 1 剪枝配置
 starter_model: Qwen/Qwen3.5-2B
 target_params_b: 0.7
-target_vocab_size: 110000        # 中英为主 + 预留主要语言
+target_vocab_size: 80000         # 中英语料全保(~74k)吃饱 + 少量预留;频次必须统计训练语料(见 CLAUDE 决策2)
 keep_languages: [zh, en]          # 第一版训练语言
-reserve_languages: [ja, ko, fr, de, es, ru]  # 词表预留、暂不训练
+reserve_languages: [ja, ko, fr, de, es, ru]  # 仅用 --calib-file 填中英之外的剩余预算,不挤占中英
 drop_vision: true
 
 # 结构目标（勘探结论 2026-05-30 后确定，中庸取向）
 # 现状 2B 纯文本：24 层 / hidden 2048 / FFN 6144 / vocab 248320 = 1.882B
-# 目标：剥视觉 + 裁词表 + 减层 + 缩 FFN → ≈0.69B（transformer ≈0.46B）
+# 目标：剥视觉 + 裁词表 + 减层 + 缩 FFN → ≈0.62B（80k 词表;transformer ≈0.46B,embed tied ≈0.16B）
 hidden_size: 2048                 # 不变（绕开 head_dim/mrope 风险）
 target_layers: 12                 # 24 → 12，保持 [linear,linear,linear,full]×3 节律
 target_ffn: 3072                  # 6144 → 3072（FFN 是层内大头，缩 FFN 杠杆最高）
