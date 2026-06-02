@@ -63,19 +63,26 @@ def main():
             print(f"  HYP : {hyp!r}")
             print(f"  REF : {r['tgt']}")
 
-    def score(idxs):
+    def score(idxs, tokenize):
+        # 目标中文用 sacrebleu 'zh' 字符级分词,否则默认空格切词会把整句中文当一个词、BLEU≈0
         h = [hyps[i] for i in idxs]
         rf = [refs[i] for i in idxs]
         al = sum(len(x) for x in h) / max(1, len(h))
-        return {"samples": len(h), "BLEU": round(corpus_bleu(h, rf), 2),
+        return {"samples": len(h), "BLEU": round(corpus_bleu(h, rf, tokenize=tokenize), 2),
                 "chrF": round(corpus_chrf(h, rf), 2), "avg_hyp_chars": round(al, 1)}
 
-    summary = {"all": score(range(len(hyps)))}
+    # 按方向分别评(混合方向的 BLEU 因分词器不同无意义,故只分方向报)
+    summary = {}
     for d in sorted({r["direction"] for r in recs}):
-        summary[d] = score([i for i, r in enumerate(recs) if r["direction"] == d])
+        tok_d = "zh" if d.endswith("2zh") else None   # 目标语言决定分词器
+        summary[d] = score([i for i, r in enumerate(recs) if r["direction"] == d], tok_d)
+    summary["chrF_all"] = round(corpus_chrf(hyps, refs), 2)   # chrF 字符级,跨语言可比,给个总览
 
     for k, v in summary.items():
-        print(f"[{k:6}] " + "  ".join(f"{kk}={vv}" for kk, vv in v.items()))
+        if isinstance(v, dict):
+            print(f"[{k:8}] " + "  ".join(f"{kk}={vv}" for kk, vv in v.items()))
+        else:
+            print(f"[{k:8}] {v}")
 
     if args.out:
         with Path(args.out).open("w", encoding="utf-8") as f:

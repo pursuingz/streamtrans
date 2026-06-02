@@ -2,9 +2,10 @@
 from typing import List, Optional
 
 
-def corpus_bleu(hyps: List[str], refs: List[str]) -> float:
+def corpus_bleu(hyps: List[str], refs: List[str], tokenize: Optional[str] = None) -> float:
+    """tokenize: 中文目标传 'zh'(字符级切词),否则默认空格切词会把整句中文当一个词、BLEU≈0。"""
     import sacrebleu
-    return sacrebleu.corpus_bleu(hyps, [refs]).score
+    return sacrebleu.corpus_bleu(hyps, [refs], tokenize=tokenize).score
 
 
 def corpus_chrf(hyps: List[str], refs: List[str]) -> float:
