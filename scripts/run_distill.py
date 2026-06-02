@@ -18,6 +18,14 @@ from streamtrans.distill.kd_losses import combined_loss
 from streamtrans.distill.teacher_logits_io import ShardReader
 
 
+def save_ckpt(student, path):
+    """存 checkpoint：临时开 use_cache 让导出的 config 直接可 generate,存完还原。"""
+    prev = student.config.use_cache
+    student.config.use_cache = True
+    student.save_pretrained(path)
+    student.config.use_cache = prev
+
+
 def build_optimizer(params, lr: float):
     try:
         import bitsandbytes as bnb
@@ -73,6 +81,7 @@ def main():
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--steps", type=int, default=None, help="覆盖 config 的 steps")
     ap.add_argument("--batch-size", type=int, default=None, help="覆盖 config 的 batch_size")
+    ap.add_argument("--save-every", type=int, default=3000, help="每 N step 存中间 checkpoint(0关闭)")
     args = ap.parse_args()
     cfg = load_config(args.config, DistillConfig)
 
@@ -142,6 +151,10 @@ def main():
                     pbar.update(1)
                     pbar.set_postfix(lr=f"{sched.get_last_lr()[0]:.1e}",
                                      avg50=f"{sum(recent) / len(recent):.3f}", loss=f"{step_loss:.3f}")
+                    if args.save_every and not args.smoke and step % args.save_every == 0 and step < steps:
+                        p = Path("checkpoints") / f"distilled_step{step}"
+                        save_ckpt(student, p)
+                        pbar.write(f"[distill] 中间 checkpoint -> {p} (avg50={sum(recent) / len(recent):.3f})")
                     if step >= steps:
                         done = True
                         break
@@ -150,8 +163,7 @@ def main():
     pbar.close()
 
     out_dir = Path("checkpoints") / ("distilled_smoke" if args.smoke else "distilled_20260530")
-    student.config.use_cache = True
-    student.save_pretrained(out_dir)
+    save_ckpt(student, out_dir)
     print(f"[distill] 保存 -> {out_dir}")
     if len(losses) >= 4:
         head = sum(losses[:3]) / 3
