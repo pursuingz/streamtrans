@@ -27,6 +27,7 @@ def main():
     ap.add_argument("--min-new", type=int, default=0, help="强制最少生成 token(诊断过早 eos)")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--show", type=int, default=0, help="打印前 N 条 src/hyp/ref 供诊断")
+    ap.add_argument("--out", default=None, help="把每条 src/hyp/ref 写 JSONL,末行写 summary")
     args = ap.parse_args()
 
     from transformers import AutoTokenizer, Qwen3_5ForCausalLM
@@ -41,7 +42,7 @@ def main():
     if args.limit:
         rows = rows[: args.limit]
 
-    hyps, refs = [], []
+    hyps, refs, recs = [], [], []
     for i, r in enumerate(rows):
         p_new = remapper.encode(tok, render_prompt(r["src"], r["direction"]))
         ids = torch.tensor([p_new], device=dev)
@@ -52,14 +53,34 @@ def main():
         hyp = remapper.decode(tok, out_new, skip_special_tokens=True)
         hyps.append(hyp)
         refs.append(r["tgt"])
+        recs.append({"direction": r["direction"], "src": r["src"], "hyp": hyp, "ref": r["tgt"],
+                     "gen_tok": len(out_new)})
         if i < args.show:
             print(f"--- [{i}] {r['direction']}  (prompt {len(p_new)} tok, gen {len(out_new)} tok)")
             print(f"  SRC : {r['src']}")
             print(f"  HYP : {hyp!r}")
             print(f"  REF : {r['tgt']}")
 
-    avg_len = sum(len(h) for h in hyps) / max(1, len(hyps))
-    print(f"samples={len(hyps)}  BLEU={corpus_bleu(hyps, refs):.2f}  chrF={corpus_chrf(hyps, refs):.2f}  avg_hyp_chars={avg_len:.1f}")
+    def score(idxs):
+        h = [hyps[i] for i in idxs]
+        rf = [refs[i] for i in idxs]
+        al = sum(len(x) for x in h) / max(1, len(h))
+        return {"samples": len(h), "BLEU": round(corpus_bleu(h, rf), 2),
+                "chrF": round(corpus_chrf(h, rf), 2), "avg_hyp_chars": round(al, 1)}
+
+    summary = {"all": score(range(len(hyps)))}
+    for d in sorted({r["direction"] for r in recs}):
+        summary[d] = score([i for i, r in enumerate(recs) if r["direction"] == d])
+
+    for k, v in summary.items():
+        print(f"[{k:6}] " + "  ".join(f"{kk}={vv}" for kk, vv in v.items()))
+
+    if args.out:
+        with Path(args.out).open("w", encoding="utf-8") as f:
+            for rec in recs:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            f.write(json.dumps({"summary": summary}, ensure_ascii=False) + "\n")
+        print(f"-> {args.out} ({len(recs)} 条译文 + summary)")
 
 
 if __name__ == "__main__":
