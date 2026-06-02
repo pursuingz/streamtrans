@@ -125,7 +125,7 @@ def main():
                     continue
                 total, ce, kd = res
                 (total / cfg.grad_accum).backward()
-                win.append(float(total))
+                win.append(total.detach().item())
                 micro += 1
                 if micro % cfg.grad_accum == 0:
                     torch.nn.utils.clip_grad_norm_(student.parameters(), 1.0)
